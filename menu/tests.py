@@ -99,6 +99,31 @@ class MenuItemTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_duplicate_name_is_rejected(self):
+        self.client.force_authenticate(self.staff_user)
+        response = self.client.post(
+            "/api/menu-items/",
+            {"name": "Chicken Burger", "description": "", "price": "9.00", "available": True},
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("name", response.data)
+
+    def test_duplicate_name_is_case_insensitive(self):
+        self.client.force_authenticate(self.staff_user)
+        response = self.client.post(
+            "/api/menu-items/",
+            {"name": "chicken burger", "description": "", "price": "9.00", "available": True},
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("name", response.data)
+
+    def test_updating_item_without_changing_name_is_allowed(self):
+        self.client.force_authenticate(self.staff_user)
+        response = self.client.patch(
+            f"/api/menu-items/{self.available_item.id}/", {"price": "9.99"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+
     # ---- not found ----
 
     def test_retrieve_nonexistent_item_returns_404(self):
@@ -143,8 +168,6 @@ class MenuItemFilteringTests(APITestCase):
         # 15 items created, PAGE_SIZE=10, so first page should have 10
         self.assertEqual(len(response.data["results"]), 10)
         self.assertEqual(response.data["count"], 15)
-
-
 
 
 class MenuItemStaffActionTests(APITestCase):
