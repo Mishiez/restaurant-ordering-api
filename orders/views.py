@@ -1,4 +1,5 @@
-from rest_framework import viewsets
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -14,6 +15,9 @@ class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated, IsOwnerOrStaff]
     http_method_names = ['get', 'post', 'patch', 'head', 'options']
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['status']
+    ordering_fields = ['created_at', 'updated_at', 'total']
 
     def get_queryset(self):
         user = self.request.user
@@ -32,11 +36,6 @@ class OrderViewSet(viewsets.ModelViewSet):
     def pay(self, request, pk=None):
         order = self.get_object()
         if order.customer_id != request.user.id:
-            # Object-level permission already blocks non-owners from
-            # reaching this point via get_object(), but staff *can*
-            # reach it (IsOwnerOrStaff allows staff through) — and
-            # paying isn't a staff action, so we explicitly exclude
-            # staff here rather than relying on ownership alone.
             raise ValidationError("Only the order's owner can pay for it.")
         validate_status_transition(order.status, Order.Status.PAID)
         if not order.items.exists():

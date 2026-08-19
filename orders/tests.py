@@ -125,7 +125,7 @@ class OrderOwnershipTests(APITestCase):
         self.client.force_authenticate(self.customer_b)
         response = self.client.get("/api/orders/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 0)
+        self.assertEqual(response.data["count"], 0)
 
     def test_list_requires_authentication(self):
         response = self.client.get("/api/orders/")
@@ -282,3 +282,30 @@ class OrderStateMachineTests(APITestCase):
         self.client.force_authenticate(self.staff_user)
         response = self.client.post(f"/api/orders/{order.id}/pay/")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+
+
+class OrderFilteringTests(APITestCase):
+    def setUp(self):
+        self.customer = User.objects.create_user(username="filtercustomer", password="pass12345")
+        self.burger = MenuItem.objects.create(name="Burger", price=Decimal("8.50"), available=True)
+        self.client.force_authenticate(self.customer)
+        r1 = self.client.post("/api/orders/", {"items": [{"menu_item_id": self.burger.id, "quantity": 1}]}, format="json")
+        self.order1 = Order.objects.get(id=r1.data["id"])
+        r2 = self.client.post("/api/orders/", {"items": [{"menu_item_id": self.burger.id, "quantity": 1}]}, format="json")
+        self.order2 = Order.objects.get(id=r2.data["id"])
+        self.order2.status = "PAID"
+        self.order2.save()
+
+    def test_filter_by_status(self):
+        response = self.client.get("/api/orders/?status=PAID")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        statuses = [o["status"] for o in response.data["results"]]
+        self.assertTrue(all(s == "PAID" for s in statuses))
+
+    def test_list_is_paginated(self):
+        response = self.client.get("/api/orders/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("count", response.data)
+        self.assertIn("results", response.data)

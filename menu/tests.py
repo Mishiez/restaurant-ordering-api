@@ -10,6 +10,7 @@ User = get_user_model()
 
 
 class MenuItemTests(APITestCase):
+
     def setUp(self):
         self.staff_user = User.objects.create_user(
             username="staffuser", password="pass12345", role="STAFF"
@@ -30,7 +31,7 @@ class MenuItemTests(APITestCase):
         self.client.force_authenticate(self.customer_user)
         response = self.client.get("/api/menu-items/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        names = [item["name"] for item in response.data]
+        names = [item["name"] for item in response.data["results"]]
         self.assertIn("Chicken Burger", names)
         self.assertNotIn("Seasonal Soup", names)
 
@@ -38,7 +39,7 @@ class MenuItemTests(APITestCase):
         self.client.force_authenticate(self.staff_user)
         response = self.client.get("/api/menu-items/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        names = [item["name"] for item in response.data]
+        names = [item["name"] for item in response.data["results"]]
         self.assertIn("Chicken Burger", names)
         self.assertIn("Seasonal Soup", names)
 
@@ -111,3 +112,34 @@ class MenuItemTests(APITestCase):
         self.client.force_authenticate(self.customer_user)
         response = self.client.get(f"/api/menu-items/{self.unavailable_item.id}/")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+
+
+class MenuItemFilteringTests(APITestCase):
+    def setUp(self):
+        self.staff_user = User.objects.create_user(username="filterstaff", password="pass12345", role="STAFF")
+        for i in range(15):
+            MenuItem.objects.create(name=f"Item {i}", price=Decimal("5.00"), available=(i % 2 == 0))
+
+    def test_filter_by_available(self):
+        self.client.force_authenticate(self.staff_user)
+        response = self.client.get("/api/menu-items/?available=true")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(all(item["available"] for item in response.data["results"]))
+
+    def test_search_by_name(self):
+        self.client.force_authenticate(self.staff_user)
+        response = self.client.get("/api/menu-items/?search=Item 1")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(len(response.data["results"]) >= 1)
+
+    def test_list_is_paginated(self):
+        self.client.force_authenticate(self.staff_user)
+        response = self.client.get("/api/menu-items/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("count", response.data)
+        self.assertIn("results", response.data)
+        # 15 items created, PAGE_SIZE=10, so first page should have 10
+        self.assertEqual(len(response.data["results"]), 10)
+        self.assertEqual(response.data["count"], 15)
