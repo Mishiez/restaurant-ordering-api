@@ -106,9 +106,15 @@ class OrderOwnershipTests(APITestCase):
         response = self.client.get(f"/api/orders/{self.order_id}/")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_non_owner_cannot_patch_order(self):
+    def test_non_owner_cannot_patch_order_items(self):
+        from .models import Order
+        order = Order.objects.get(id=self.order_id)
+        real_item_id = order.items.first().id
+
         self.client.force_authenticate(self.customer_b)
-        response = self.client.patch(f"/api/orders/{self.order_id}/", {}, format="json")
+        response = self.client.patch(
+            f"/api/orders/{self.order_id}/items/{real_item_id}/", {"quantity": 5}, format="json"
+        )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_owner_can_view_order(self):
@@ -309,3 +315,114 @@ class OrderFilteringTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("count", response.data)
         self.assertIn("results", response.data)
+
+
+
+
+class OrderItemEndpointTests(APITestCase):
+    """Tests for the separate OrderItem resource endpoints added in
+    Phase 7's design update, and the PENDING_PAYMENT lock."""
+
+    def setUp(self):
+        self.customer = User.objects.create_user(username="itemcustomer", password="pass12345")
+        self.other_customer = User.objects.create_user(username="itemother", password="pass12345")
+        self.burger = MenuItem.objects.create(name="Burger", price=Decimal("8.50"), available=True)
+        self.fries = MenuItem.objects.create(name="Fries", price=Decimal("3.00"), available=True)
+        self.soup = MenuItem.objects.create(name="Soup", price=Decimal("5.00"), available=False)
+
+        self.client.force_authenticate(self.customer)
+        response = self.client.post(
+            "/api/orders/", {"items": [{"menu_item_id": self.burger.id, "quantity": 1}]}, format="json"
+        )
+        self.order = Order.objects.get(id=response.data["id"])
+        self.item = self.order.items.first()
+
+    def test_owner_can_add_item(self):
+        response = self.client.post(
+            f"/api/orders/{self.order.id}/items/",
+            {"menu_item_id": self.fries.id, "quantity": 2},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.items.count(), 2)
+        self.assertEqual(self.order.total, Decimal("14.50"))
+
+    def test_cannot_add_unavailable_item_to_existing_order(self):
+        response = self.client.post(
+            f"/api/orders/{self.order.id}/items/",
+            {"menu_item_id": self.soup.id, "quantity": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_non_owner_cannot_add_item(self):
+        self.client.force_authenticate(self.other_customer)
+        response = self.client.post(
+            f"/api/orders/{self.order.id}/items/",
+            {"menu_item_id": self.fries.id, "quantity": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_cannot_add_item_once_paid(self):
+        self.order.status = "PAID"
+        self.order.save()
+        response = self.client.post(
+            f"/api/orders/{self.order.id}/items/",
+            {"menu_item_id": self.fries.id, "quantity": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_owner_can_change_quantity(self):
+        response = self.client.patch(
+            f"/api/orders/{self.order.id}/items/{self.item.id}/",
+            {"quantity": 3},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.total, Decimal("25.50"))
+
+    def test_cannot_change_quantity_once_paid(self):
+        self.order.status = "PAID"
+        self.order.save()
+        response = self.client.patch(
+            f"/api/orders/{self.order.id}/items/{self.item.id}/",
+            {"quantity": 3},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_owner_can_remove_item(self):
+        response = self.client.delete(f"/api/orders/{self.order.id}/items/{self.item.id}/")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.items.count(), 0)
+        self.assertEqual(self.order.total, Decimal("0.00"))
+
+    def test_non_owner_cannot_remove_item(self):
+        self.client.force_authenticate(self.other_customer)
+        response = self.client.delete(f"/api/orders/{self.order.id}/items/{self.item.id}/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_cannot_remove_item_once_paid(self):
+        self.order.status = "PAID"
+        self.order.save()
+        response = self.client.delete(f"/api/orders/{self.order.id}/items/{self.item.id}/")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_removing_last_item_leaves_order_empty_not_rejected(self):
+        # Design update: removing the last item is allowed — pay()
+        # is what rejects an empty order, not item removal itself.
+        response = self.client.delete(f"/api/orders/{self.order.id}/items/{self.item.id}/")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        response = self.client.post(f"/api/orders/{self.order.id}/pay/")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_patch_nonexistent_item_returns_404(self):
+        response = self.client.patch(
+            f"/api/orders/{self.order.id}/items/99999/", {"quantity": 2}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

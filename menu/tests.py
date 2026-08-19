@@ -143,3 +143,40 @@ class MenuItemFilteringTests(APITestCase):
         # 15 items created, PAGE_SIZE=10, so first page should have 10
         self.assertEqual(len(response.data["results"]), 10)
         self.assertEqual(response.data["count"], 15)
+
+
+
+
+class MenuItemStaffActionTests(APITestCase):
+    def setUp(self):
+        self.staff_user = User.objects.create_user(username="actionstaff", password="pass12345", role="STAFF")
+        self.customer = User.objects.create_user(username="actioncustomer", password="pass12345")
+        self.item = MenuItem.objects.create(name="Salad", price=Decimal("6.00"), available=True)
+
+    def test_staff_can_update_menu_item(self):
+        self.client.force_authenticate(self.staff_user)
+        response = self.client.patch(f"/api/menu-items/{self.item.id}/", {"price": "7.50"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.price, Decimal("7.50"))
+
+    def test_staff_can_delete_unreferenced_menu_item(self):
+        self.client.force_authenticate(self.staff_user)
+        response = self.client.delete(f"/api/menu-items/{self.item.id}/")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(MenuItem.objects.filter(id=self.item.id).exists())
+
+    def test_cannot_delete_menu_item_referenced_by_order(self):
+        from orders.models import Order, OrderItem
+        order = Order.objects.create(customer=self.customer)
+        OrderItem.objects.create(order=order, menu_item=self.item, quantity=1, unit_price=self.item.price)
+
+        self.client.force_authenticate(self.staff_user)
+        response = self.client.delete(f"/api/menu-items/{self.item.id}/")
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT, response.data)
+        self.assertTrue(MenuItem.objects.filter(id=self.item.id).exists())
+
+    def test_update_nonexistent_menu_item_returns_404(self):
+        self.client.force_authenticate(self.staff_user)
+        response = self.client.patch("/api/menu-items/99999/", {"price": "1.00"})
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
