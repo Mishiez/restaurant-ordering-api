@@ -17,6 +17,6 @@ class MenuItemViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_authenticated and user.is_staff:
+        if user.is_authenticated and user.role == user.Role.STAFF:
             return MenuItem.objects.all()
         return MenuItem.objects.filter(available=True)

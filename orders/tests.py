@@ -15,7 +15,7 @@ class OrderCreationTests(APITestCase):
     def setUp(self):
         self.customer_a = User.objects.create_user(username="customerA", password="pass12345")
         self.customer_b = User.objects.create_user(username="customerB", password="pass12345")
-        self.staff_user = User.objects.create_user(username="staffuser", password="pass12345", is_staff=True)
+        self.staff_user = User.objects.create_user(username="staffuser", password="pass12345", role="STAFF")
         self.burger = MenuItem.objects.create(name="Burger", price=Decimal("8.50"), available=True)
         self.fries = MenuItem.objects.create(name="Fries", price=Decimal("3.00"), available=True)
         self.soup = MenuItem.objects.create(name="Soup", price=Decimal("5.00"), available=False)
@@ -89,7 +89,7 @@ class OrderOwnershipTests(APITestCase):
     def setUp(self):
         self.customer_a = User.objects.create_user(username="customerA", password="pass12345")
         self.customer_b = User.objects.create_user(username="customerB", password="pass12345")
-        self.staff_user = User.objects.create_user(username="staffuser", password="pass12345", is_staff=True)
+        self.staff_user = User.objects.create_user(username="staffuser", password="pass12345", role="STAFF")
         self.burger = MenuItem.objects.create(name="Burger", price=Decimal("8.50"), available=True)
 
         self.client.force_authenticate(self.customer_a)
@@ -137,7 +137,7 @@ class OrderStateMachineTests(APITestCase):
     def setUp(self):
         self.customer = User.objects.create_user(username="customer", password="pass12345")
         self.other_customer = User.objects.create_user(username="other", password="pass12345")
-        self.staff_user = User.objects.create_user(username="staff", password="pass12345", is_staff=True)
+        self.staff_user = User.objects.create_user(username="staff", password="pass12345", role="STAFF")
         self.burger = MenuItem.objects.create(name="Burger", price=Decimal("8.50"), available=True)
 
     def make_order(self, user=None):
