@@ -17,7 +17,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_staff:
+        if user.role == user.Role.STAFF:
             return Order.objects.all()
         if self.action == 'list':
             return Order.objects.filter(customer=user)
@@ -58,7 +58,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def advance(self, request, pk=None):
         order = self.get_object()
-        if not request.user.is_staff:
+        if request.user.role != request.user.Role.STAFF:
             raise ValidationError("Only staff can advance order status.")
         next_status = NEXT_STAFF_STATUS.get(order.status)
         if next_status is None:

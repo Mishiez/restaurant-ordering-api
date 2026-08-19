@@ -12,7 +12,7 @@ User = get_user_model()
 class MenuItemTests(APITestCase):
     def setUp(self):
         self.staff_user = User.objects.create_user(
-            username="staffuser", password="pass12345", is_staff=True
+            username="staffuser", password="pass12345", role="STAFF"
         )
         self.customer_user = User.objects.create_user(
             username="customeruser", password="pass12345", is_staff=False
