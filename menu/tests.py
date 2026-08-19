@@ -30,7 +30,7 @@ class MenuItemTests(APITestCase):
         self.client.force_authenticate(self.customer_user)
         response = self.client.get("/api/menu-items/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        names = [item["name"] for item in response.data]
+        names = [item["name"] for item in response.data["results"]]
         self.assertIn("Chicken Burger", names)
         self.assertNotIn("Seasonal Soup", names)
 
@@ -38,7 +38,7 @@ class MenuItemTests(APITestCase):
         self.client.force_authenticate(self.staff_user)
         response = self.client.get("/api/menu-items/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        names = [item["name"] for item in response.data]
+        names = [item["name"] for item in response.data["results"]]
         self.assertIn("Chicken Burger", names)
         self.assertIn("Seasonal Soup", names)
 

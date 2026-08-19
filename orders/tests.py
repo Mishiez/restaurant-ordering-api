@@ -125,7 +125,7 @@ class OrderOwnershipTests(APITestCase):
         self.client.force_authenticate(self.customer_b)
         response = self.client.get("/api/orders/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 0)
+        self.assertEqual(response.data["count"], 0)
 
     def test_list_requires_authentication(self):
         response = self.client.get("/api/orders/")
