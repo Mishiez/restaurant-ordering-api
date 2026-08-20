@@ -40,6 +40,13 @@ python manage.py test
  
 68 tests across `core`, `accounts`, `menu`, and `orders`, covering success,
 validation, unauthorized, not-found, and ownership cases for every endpoint.
+
+## Manual testing reference
+
+For a full list of Postman requests (method, headers, body) demonstrating
+every gate pass criterion — status codes, pagination, filtering, the
+non-owner ownership test, and validation — see
+[`docs/postman-testing-guide.md`](docs/postman-testing-guide.md).
  
 ## Roles
  
