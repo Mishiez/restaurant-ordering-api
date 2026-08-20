@@ -1,4 +1,4 @@
-# Postman Testing Guide — Gate A3 Pass Criteria
+# Postman Testing Guide 
 
 Manual request reference for demonstrating every pass criterion against a
 running local server (`python manage.py runserver`, default
